@@ -1,5 +1,5 @@
 # Ad Blocker for Spotify Web
-This is an expirimental, simple chrome extension to remove audio ads on Spotify web player.
+This is an experimental, simple chrome extension to remove audio ads on Spotify web player.
 It's available on the [Chrome Web Store](https://chrome.google.com/webstore/detail/spotify-ads-remover/mghhlojofjipigjobacbjdngmjafdeim?hl=iw&authuser=0) too.
 
 ## How ads are removed
