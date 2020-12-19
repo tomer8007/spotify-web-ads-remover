@@ -1,4 +1,5 @@
 var currentTracks = [];
+var removedAdsList = [];
 var deviceId = "";
 
 var originalFetch = window.fetch;
@@ -127,6 +128,7 @@ function manipulateStateMachine(stateMachine, currentStateIndex, isReplacingStat
                 {
                     console.log("SpotifyExtension: Could not remove ad at " + trackURI + " because it is currently playing");
                     debugger;
+                    showToast("Couldn't remove ad...");
                     continue;
                 }
 
@@ -138,7 +140,7 @@ function manipulateStateMachine(stateMachine, currentStateIndex, isReplacingStat
                 states[i] = state;
 
                 removedAds = true;
-                console.log("SpotifyAdBlocker: Removed ad at " + trackURI);
+                onAdRemoved(trackURI);
 
                 break;
             }
@@ -153,6 +155,25 @@ function manipulateStateMachine(stateMachine, currentStateIndex, isReplacingStat
     currentTracks = tracks;
 
     return stateMachine;
+}
+
+function onAdRemoved(trackURI)
+{
+    console.log("SpotifyAdBlocker: Removed ad at " + trackURI);
+    if (!removedAdsList.includes(trackURI))
+    {
+        removedAdsList.push(trackURI);
+        showToast("Removed ad");
+    }
+}
+
+function showToast(text)
+{
+    var snackbar = document.getElementById("snackbar");
+    snackbar.innerText = text;
+    snackbar.className = "show";
+
+    setTimeout(function(){ snackbar.className = snackbar.className.replace("show", ""); }, 3000);
 }
 
 function* statesGenerator(states, startingStateIndex = 2, nextStateName = "skip_next")
@@ -194,4 +215,41 @@ function findNextTrackState(states, tracks, startingStateIndex = 2, sourceTrack)
     }
 
     return null;
+}
+
+//
+// Graphics
+//
+
+startObserving();
+
+function startObserving()
+{
+    var mutationObserver = new MutationObserver(function (mutations)
+    {
+        for (var i = 0; i < mutations.length; i++)
+        {
+            var addedNodes = mutations[i].addedNodes;
+            var removedNodes = mutations[i].removedNodes;
+
+            for (var j = 0; j < addedNodes.length; j++)
+            {
+                var addedNode = addedNodes[j];
+                if (addedNode.getAttribute == undefined) continue;
+    
+                if (addedNode.getAttribute("role") == "row")
+                {
+                    // song row added
+                }
+
+                if (addedNode.classList.contains("os-resize-observer"))
+                {
+                    var snackbar = document.createElement('div');
+                    snackbar.setAttribute("id", "snackbar");
+                    addedNode.appendChild(snackbar);
+                }
+            }
+        }
+    });
+    mutationObserver.observe(document.documentElement, { childList: true, subtree: true });
 }
