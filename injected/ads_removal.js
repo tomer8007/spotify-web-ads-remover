@@ -99,7 +99,7 @@ function onFetchResponseReceived(url, init, responseBody)
     return responseBody;
 }
 
-function manipulateStateMachine(stateMachine, currentStateIndex, isReplacingState)
+function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingState)
 {
     var states = stateMachine["states"];
     var tracks = stateMachine["tracks"];
@@ -124,7 +124,7 @@ function manipulateStateMachine(stateMachine, currentStateIndex, isReplacingStat
 
             if (trackURI.includes(":ad:") && state["disallow_seeking"] == true)
             {   
-                if (i == currentStateIndex && !isReplacingState) 
+                if (i == startingStateIndex && !isReplacingState) 
                 {
                     console.log("SpotifyExtension: Could not remove ad at " + trackURI + " because it is currently playing");
                     debugger;
@@ -132,15 +132,30 @@ function manipulateStateMachine(stateMachine, currentStateIndex, isReplacingStat
                     continue;
                 }
 
-                var nextState = findNextTrackState(states, tracks, currentStateIndex, track);
-                if (nextState == null) { continue; }
+                var nextState = findNextTrackState(states, tracks, startingStateIndex, track);
+                if (nextState != null) 
+                {
+                    // make this state equal to the next one 
+                    state = nextState;
 
-                // make this state equal to the next one and update the current state
-                state = nextState;
+                    onAdRemoved(trackURI);
+
+                    removedAds = true;
+                }
+                else
+                {
+                    // we can't really skip over this state becuase we don't know where to skip to.
+                    // Either we will be able to do so in the next states update, or we won't.
+                    // In case we won't let's at least shorten the ad.
+                    console.log("SpotifyExtension: Shortned ad at " + trackURI);
+
+                    state["disallow_seeking"] = false;
+                    state["restrictions"] = {};
+                    state["initial_playback_position"] = 1000000;
+                }
+
+                // replace the current state
                 states[i] = state;
-
-                removedAds = true;
-                onAdRemoved(trackURI);
 
                 break;
             }
