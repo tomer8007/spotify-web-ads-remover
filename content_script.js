@@ -1,10 +1,11 @@
-injectScripts();
 
-async function injectScripts() 
+injectFunctionInstantly(startInterceptingWebScoket);
+injectOtherScripts();
+
+async function injectOtherScripts() 
 {
-	await injectFunctionInstantly(startInterceptingWebScoket);
-
 	await injectScript('injected/ads_removal.js');
+	await injectScript('lib/sweetalert.min.js');
 }
 
 function injectScript(scriptName) 

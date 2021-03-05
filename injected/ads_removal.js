@@ -2,8 +2,11 @@ var currentTracks = [];
 var removedAdsList = [];
 var deviceId = "";
 
-var originalFetch = window.fetch;
+startObserving();
 
+var originalFetch = window.fetch;
+var isFetchInterceptionWorking = false;
+var isWebScoketInterceptionWorking = false;
 var isSimulatingStateChnage = false;
 
 //
@@ -49,6 +52,8 @@ wsHook.after = function(messageEvent, url)
 
             payload["state_machine"] = manipulateStateMachine(stateMachine, currentStateIndex, true);
             data.payloads[0] = payload;
+
+            isWebScoketInterceptionWorking = true;
         }
 
         if (isSimulatingStateChnage) 
@@ -67,6 +72,7 @@ wsHook.after = function(messageEvent, url)
     }
 
     messageEvent.data = JSON.stringify(data);
+
     return messageEvent;
 }
 
@@ -87,6 +93,8 @@ function onFetchResponseReceived(url, init, responseBody)
             var currentStateIndex = updatedStateRef["state_index"];
 
             data["state_machine"] = manipulateStateMachine(stateMachine, currentStateIndex, false);
+
+            isFetchInterceptionWorking = true;
 
             return data;
 
@@ -114,9 +122,10 @@ function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingSta
         for (var i = 0; i < states.length; i++)
         {
             var state = states[i];
-
+            
             var trackID = state["track"];
             var track = tracks[trackID];
+
             var trackURI = track["metadata"]["uri"];
             var trackName = track["metadata"]["name"];
 
@@ -126,10 +135,13 @@ function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingSta
             {   
                 if (i == startingStateIndex && !isReplacingState) 
                 {
-                    console.log("SpotifyExtension: Could not remove ad at " + trackURI + " because it is currently playing");
-                    debugger;
-                    showToast("Couldn't remove ad...");
-                    continue;
+                    state = shortenedState(state, track);
+                    onAdRemoved(trackURI, skipped=true);
+                    removedAds = true;
+                    
+                    //onAdCouldntBeRemoved(trackURI);
+                    //debugger;
+                    //continue;
                 }
 
                 var nextState = findNextTrackState(states, tracks, startingStateIndex, track);
@@ -147,11 +159,10 @@ function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingSta
                     // we can't really skip over this state becuase we don't know where to skip to.
                     // Either we will be able to do so in the next states update, or we won't.
                     // In case we won't let's at least shorten the ad.
-                    console.log("SpotifyExtension: Shortned ad at " + trackURI);
+                    console.log("SpotifyAdRemover: Shortned ad at " + trackURI);
+                    state = shortenedState(state, track);
+                    removedAds = true;
 
-                    state["disallow_seeking"] = false;
-                    state["restrictions"] = {};
-                    state["initial_playback_position"] = 1000000;
                 }
 
                 // replace the current state
@@ -172,14 +183,53 @@ function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingSta
     return stateMachine;
 }
 
-function onAdRemoved(trackURI)
+function shortenedState(state, track)
+{
+    var trackDuration = track["metadata"]["duration"];
+
+    state["disallow_seeking"] = false;
+    state["restrictions"] = {};
+    state["initial_playback_position"] = trackDuration;
+    state["position_offset"] = trackDuration;
+
+    return state;
+}
+
+function onAdRemoved(trackURI, skipped = false)
 {
     console.log("SpotifyAdBlocker: Removed ad at " + trackURI);
     if (!removedAdsList.includes(trackURI))
     {
         removedAdsList.push(trackURI);
-        showToast("Removed ad");
+        if (skipped)
+            showToast("Skipped ad");
+        else
+            showToast("Removed ad");
     }
+}
+
+var lastMissedAdTime = 0;
+
+function onAdCouldntBeRemoved(trackURI)
+{
+    console.log("SpotifyAdRemover: Could not remove ad at " + trackURI + " because it is currently playing");
+
+    var now = new Date();
+
+    if (now - lastMissedAdTime > 60000)
+    {
+        Swal.fire({
+            title: "Can't remove ad",
+            html: "It appears that an ad was missed and couldn't be removed. Please report that back to the developer.",
+            icon: "warning",
+            width: 600,
+            confirmButtonColor: "#DD6B55",
+            confirmButtonText: "Got it",
+            heightAuto: false
+        });
+    }
+
+    lastMissedAdTime = now;
 }
 
 function showToast(text)
@@ -236,35 +286,84 @@ function findNextTrackState(states, tracks, startingStateIndex = 2, sourceTrack)
 // Graphics
 //
 
-startObserving();
+function onMainUIReady(addedNode)
+{
+    var snackbar = document.createElement('div');
+    snackbar.setAttribute("id", "snackbar");
+    addedNode.appendChild(snackbar);
+}
+
+var checkedForInterception = false;
+
+function onSongResumed()
+{
+    if (!checkedForInterception)
+    {
+        setTimeout(checkInterception, 1000);
+        checkedForInterception = true;
+    }
+}
+
+function checkInterception()
+{
+    if (!isFetchInterceptionWorking || !isWebScoketInterceptionWorking)
+    {
+        Swal.fire({
+            title: "Oops...",
+            html: "Spotify Ads Remover has detected that interception is not fully working. Please try refreshing this page, or, if the problem presists, writing back to the developer.",
+            icon: "error",
+            width: 600,
+            confirmButtonColor: "#DD6B55",
+            confirmButtonText: "OK",
+            heightAuto: false
+        });
+    }
+    else
+    {
+        console.log("SpotifyAdRemoveer: Interception is working.");
+    }
+}
 
 function startObserving()
 {
-    var mutationObserver = new MutationObserver(function (mutations)
+    var mutationObserver = new MutationObserver(function (mutationList)
     {
-        for (var i = 0; i < mutations.length; i++)
-        {
-            var addedNodes = mutations[i].addedNodes;
-            var removedNodes = mutations[i].removedNodes;
-
-            for (var j = 0; j < addedNodes.length; j++)
-            {
-                var addedNode = addedNodes[j];
-                if (addedNode.getAttribute == undefined) continue;
-    
-                if (addedNode.getAttribute("role") == "row")
-                {
-                    // song row added
-                }
-
-                if (addedNode.classList.contains("os-resize-observer"))
-                {
-                    var snackbar = document.createElement('div');
-                    snackbar.setAttribute("id", "snackbar");
-                    addedNode.appendChild(snackbar);
-                }
+        mutationList.forEach( (mutation) => {
+            switch(mutation.type) {
+              case 'childList':
+                /* One or more children have been added to and/or removed
+                   from the tree. */
+                   var addedNodes = mutation.addedNodes;
+       
+                   for (var j = 0; j < addedNodes.length; j++)
+                   {
+                       var addedNode = addedNodes[j];
+                       if (addedNode.getAttribute == undefined) continue;
+           
+                       if (addedNode.getAttribute("role") == "row")
+                       {
+                           // song row added
+                       }
+       
+                       if (addedNode.classList.contains("os-resize-observer"))
+                       {
+                           onMainUIReady(addedNode);
+                       }
+                   }
+                   
+                break;
+              case 'attributes':
+                /* An attribute value changed on the element in
+                   mutation.target. */
+                   var changedNode = mutation.target;
+                   if (changedNode.getAttribute("aria-label") == "Pause")
+                   {
+                        onSongResumed();
+                   }
+                   
+                break;
             }
-        }
+          });
     });
-    mutationObserver.observe(document.documentElement, { childList: true, subtree: true });
+    mutationObserver.observe(document.documentElement, { childList: true, subtree: true, attributeFilter: ["aria-label"] });
 }
