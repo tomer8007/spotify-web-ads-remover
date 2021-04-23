@@ -46,7 +46,10 @@ function startInterceptingWebScoket()
 	{
 		var before = wsHook.before = function(data, url) 
 		{
-			return data;
+			return new Promise(function(resolve, reject)
+    		{
+				resolve(data);
+			});
 		};
 		var after = wsHook.after = function(e, url) 
 		{
@@ -65,18 +68,25 @@ function startInterceptingWebScoket()
 			this.url = url;
 			this.protocols = protocols;
 			if (!this.protocols)
-				WSObject = new _WS(url);
+			WSObject = new _WS(url);
 			else
-				WSObject = new _WS(url, protocols);
+			WSObject = new _WS(url, protocols);
 
 			var _send = WSObject.send;
 			var _wsobject = this;
 			wsHook._send = WSObject.send = function(data) 
 			{
 				//data = wsHook.before(data, WSObject.url) || data;
-				var newData = wsHook.before(data, WSObject.url);
-				if (newData != null)
-					_send.apply(WSObject, [newData]);
+				new wsHook.before(data, WSObject.url).then(function (newData)
+				{
+					if (newData != null)
+						_send.apply(WSObject, [newData]);
+					
+				}).catch(function(e)
+				{
+					console.error(e);
+					_send.apply(WSObject, [newData]);  
+				});
 			}
 
 			// Events needs to be proxied and bubbled down.
@@ -85,7 +95,7 @@ function startInterceptingWebScoket()
 			{
 				onmessageFunction = wsHook.onMessage = func;
 			});
-			WSObject.addEventListener('message', function(e) 
+			WSObject.addEventListener('message', function(event) 
 			{
 				if (!onmessageFunction)
 				{
@@ -93,10 +103,18 @@ function startInterceptingWebScoket()
 					return;
 				}
 			
-				var newEvent = wsHook.after(new MutableMessageEvent(e), this.url) || e;
-				newEvent = new MessageEvent(newEvent.type, {data: newEvent.data});
-				onmessageFunction.apply(this, [newEvent]);
+				wsHook.after(new MutableMessageEvent(event), this.url).then(function(modifiedEvent)
+				{
+					if (modifiedEvent != null)
+						onmessageFunction.apply(this, [modifiedEvent]);
+					
+				}).catch(function(e)
+				{
+					console.error(e);
+					onmessageFunction.apply(this, [event]);
+				});
 				
+				//e = new MessageEvent(e.type, e);
 			});
 
 			return WSObject;
@@ -126,5 +144,6 @@ function startInterceptingWebScoket()
 		this.type = o.type || "message";
 		this.__proto__ = o.__proto__ || MessageEvent.__proto__;
 	}
+
 
 }

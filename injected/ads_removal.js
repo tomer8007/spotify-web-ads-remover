@@ -1,13 +1,28 @@
 var currentTracks = [];
 var removedAdsList = [];
+var tamperedStatesIds = [];
 var deviceId = "";
-
-startObserving();
 
 var originalFetch = window.fetch;
 var isFetchInterceptionWorking = false;
 var isWebScoketInterceptionWorking = false;
 var isSimulatingStateChnage = false;
+
+var accessToken = "";
+
+startObserving();
+initalize();
+
+async function initalize()
+{
+    var getTokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player";
+
+    // get access token
+    var result = await fetch(getTokenUrl, {credentials: "same-origin"});
+    var resultJson = await result.json();
+    accessToken = resultJson["accessToken"];
+
+}
 
 //
 // Hook the fetch() function
@@ -38,42 +53,45 @@ window.fetch = function(url, init)
 //
 wsHook.after = function(messageEvent, url) 
 {
-    var data = JSON.parse(messageEvent.data);
-    if (data.payloads == undefined) return messageEvent;
-
-    var payload = data.payloads[0];
-    if (payload.type == "replace_state")
+    return new Promise(async function(resolve, reject)
     {
-        var stateMachine = payload["state_machine"];
-        var stateRef = payload["state_ref"];
-        if (stateRef != null) 
+        var data = JSON.parse(messageEvent.data);
+        if (data.payloads == undefined) {resolve(messageEvent); return;}
+
+        var payload = data.payloads[0];
+        if (payload.type == "replace_state")
         {
-            var currentStateIndex = stateRef["state_index"];
+            var stateMachine = payload["state_machine"];
+            var stateRef = payload["state_ref"];
+            if (stateRef != null) 
+            {
+                var currentStateIndex = stateRef["state_index"];
 
-            payload["state_machine"] = manipulateStateMachine(stateMachine, currentStateIndex, true);
-            data.payloads[0] = payload;
+                payload["state_machine"] = await manipulateStateMachine(stateMachine, currentStateIndex, true);
+                data.payloads[0] = payload;
 
-            isWebScoketInterceptionWorking = true;
+                isWebScoketInterceptionWorking = true;
+            }
+
+            if (isSimulatingStateChnage) 
+            {
+                // block this notification from reaching the client, to prevent song chnage
+                return new MessageEvent(messageEvent.type, {data: "{}"});
+            }
+        }
+        else if (payload.cluster != undefined)
+        {
+            deviceId = payload.cluster.active_device_id;
+            if (payload.update_reason == "DEVICE_STATE_CHANGED")
+            {
+                // TODO: cluster.player_state.next_tracks ?
+            }
         }
 
-        if (isSimulatingStateChnage) 
-        {
-            // block this notification from reching the client, to prevent song chnage
-            return new MessageEvent(messageEvent.type, {data: "{}"});
-        }
-    }
-    else if (payload.cluster != undefined)
-    {
-        deviceId = payload.cluster.active_device_id;
-        if (payload.update_reason == "DEVICE_STATE_CHANGED")
-        {
-            // TODO: cluster.player_state.next_tracks ?
-        }
-    }
+        messageEvent.data = JSON.stringify(data);
 
-    messageEvent.data = JSON.stringify(data);
-
-    return messageEvent;
+        resolve(messageEvent);
+    });
 }
 
 function onFetchResponseReceived(url, init, responseBody)
@@ -84,7 +102,7 @@ function onFetchResponseReceived(url, init, responseBody)
     var originalJsonPromise = responseBody.json();
     responseBody.json = function()
     {
-        return originalJsonPromise.then(function(data)
+        return originalJsonPromise.then(async function(data)
         {
             var stateMachine = data["state_machine"];           
             var updatedStateRef = data["updated_state_ref"];    
@@ -92,7 +110,7 @@ function onFetchResponseReceived(url, init, responseBody)
 
             var currentStateIndex = updatedStateRef["state_index"];
 
-            data["state_machine"] = manipulateStateMachine(stateMachine, currentStateIndex, false);
+            data["state_machine"] = await manipulateStateMachine(stateMachine, currentStateIndex, false);
 
             isFetchInterceptionWorking = true;
 
@@ -107,7 +125,7 @@ function onFetchResponseReceived(url, init, responseBody)
     return responseBody;
 }
 
-function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingState)
+async function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingState)
 {
     var states = stateMachine["states"];
     var tracks = stateMachine["tracks"];
@@ -122,6 +140,7 @@ function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingSta
         for (var i = 0; i < states.length; i++)
         {
             var state = states[i];
+            var stateId = states[i]["state_id"];
             
             var trackID = state["track"];
             var track = tracks[trackID];
@@ -133,43 +152,68 @@ function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingSta
 
             if (trackURI.includes(":ad:") && state["disallow_seeking"] == true)
             {   
-                if (i == startingStateIndex && !isReplacingState) 
+                console.log("SpotifyAdRemover: Encountered ad in " + trackURI);
+
+                var nextState = getNextState(stateMachine, track, startingStateIndex);
+                if (nextState == null)
                 {
-                    state = shortenedState(state, track);
-                    onAdRemoved(trackURI, skipped=true);
-                    removedAds = true;
+                    // we can't really skip over this state becuase we don't know where to skip to.
+                    // Either we will be able to do so in the next states update, or we won't.
+                    // In case we won't let's request the next state and insert it, or, if this fails, at least shorten the ad.
                     
-                    //onAdCouldntBeRemoved(trackURI);
-                    //debugger;
-                    //continue;
+                    try
+                    {
+                        var futureStateMachine = await getStates(stateMachine["state_machine_id"], state["state_id"]);
+                        nextState = getNextState(futureStateMachine, track);
+                        var nextStateId = nextState["state_id"];
+
+                        // fix the new state to be suitable for replacing in the currenet state machine
+                        nextState["state_id"] = stateId;
+                        nextTrack = futureStateMachine["tracks"][nextState["track"]];
+                        tracks.push(nextTrack);
+                        nextState["track"] = tracks.length - 1;
+                            
+                        if (i == startingStateIndex && !isReplacingState) 
+                        {
+                            // our new state is going to be played now, let's point the player at the future state machine
+                            nextState["state_id"] = nextStateId;
+                            stateMachine["state_machine_id"] = futureStateMachine["state_machine_id"];
+
+                            console.log("SpotifyAdRemover: Removed ad at " + trackURI + ", more complex flow");
+
+                        }
+
+                    }
+                    catch (exception)
+                    {
+                        console.error(exception);
+                        state = shortenedState(state, track);
+                        console.log("SpotifyAdRemover: Shortned ad at " + trackURI);
+                    }
+
+                    removedAds = true;
                 }
 
-                var nextState = findNextTrackState(states, tracks, startingStateIndex, track);
                 if (nextState != null) 
                 {
                     // make this state equal to the next one 
                     state = nextState;
-
-                    onAdRemoved(trackURI);
+                    tamperedStatesIds.push(nextState["state_id"]);
 
                     removedAds = true;
-                }
-                else
-                {
-                    // we can't really skip over this state becuase we don't know where to skip to.
-                    // Either we will be able to do so in the next states update, or we won't.
-                    // In case we won't let's at least shorten the ad.
-                    console.log("SpotifyAdRemover: Shortned ad at " + trackURI);
-                    state = shortenedState(state, track);
-                    removedAds = true;
-
                 }
 
                 // replace the current state
                 states[i] = state;
-
-                break;
             }
+
+            if (i == startingStateIndex && !isReplacingState && tamperedStatesIds.includes(stateId)) 
+            {
+                // our new ad-free state is going to be played now
+                console.log("SpotifyAdRemover: Removed ad at " + trackURI);
+                onAdRemoved(trackURI);
+            }
+
         }
 
     }
@@ -195,9 +239,105 @@ function shortenedState(state, track)
     return state;
 }
 
+async function getStates(stateMachineId, startingStateId)
+{
+    var statesUrl = "https://spclient.wg.spotify.com/track-playback/v1/devices/" + deviceId + "/state";
+    var body = {"seq_num":1619015341662,"state_ref":{"state_machine_id":stateMachineId, "state_id": startingStateId,"paused":false},
+            "sub_state":{"playback_speed":1,"position":5504,"duration":177343,"stream_time":81500,"media_type":"AUDIO","bitrate":160000},"previous_position":5504
+            ,"debug_source":"resume"};
+
+    var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    var resultJson = await result.json();
+    if (resultJson["error"] && 
+    resultJson["error"]["message"] == "The access token expired")
+    {
+        // refresh the access token and try again
+        await initalize();
+        result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        resultJson = await result.json();
+    }
+    
+    return resultJson["state_machine"];
+}
+
+function* statesGenerator(states, startingStateIndex = 2, nextStateName = "skip_next")
+{
+    var currentState = states[startingStateIndex];
+    var iterationCount = 0;
+
+    for (var state = currentState; state != undefined; state = states[state["transitions"][nextStateName]["state_index"]])
+    {
+        iterationCount++;
+
+        yield state;
+
+        var nextTransition = state["transitions"][nextStateName];
+        if (nextTransition == undefined) break;
+    }
+
+    return iterationCount;
+}
+
+function getNextState(stateMachine, sourceTrack, startingStateIndex = 2, excludeAds = true)
+{
+    var states = stateMachine["states"];
+    var tracks = stateMachine["tracks"];
+
+    var foundTrack = false;
+    for (var state of statesGenerator(states, startingStateIndex, "advance"))
+    {
+        var trackID = state["track"];
+        var track = tracks[trackID];
+        
+        if (foundTrack) 
+        {
+            if (excludeAds && track["content_type"] == "AD") continue;
+            return state;
+        }
+
+        foundTrack = (track["metadata"]["uri"] == sourceTrack["metadata"]["uri"]);
+
+    }
+
+    return null;
+}
+
+function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
+{
+    var states = stateMachine["states"];
+    var tracks = stateMachine["tracks"];
+    
+    var foundTrack = false;
+    for (var state of statesGenerator(states, startingStateIndex, "advance"))
+    {
+        if (state["transitions"]["advance"] == null) return null;
+        
+        var nextState = states[state["transitions"]["advance"]["state_index"]];
+        var nextStateTrack = tracks[nextState["track"]];
+
+        if (nextStateTrack["metadata"]["uri"] == sourceTrack["metadata"]["uri"])
+        {
+            return state;
+        }
+
+    }
+
+    return null;
+}
+
+//
+// Graphics
+//
+
+function onMainUIReady(addedNode)
+{
+    var snackbar = document.createElement('div');
+    snackbar.setAttribute("id", "snackbar");
+    addedNode.appendChild(snackbar);
+}
+
 function onAdRemoved(trackURI, skipped = false)
 {
-    console.log("SpotifyAdBlocker: Removed ad at " + trackURI);
     if (!removedAdsList.includes(trackURI))
     {
         removedAdsList.push(trackURI);
@@ -239,58 +379,6 @@ function showToast(text)
     snackbar.className = "show";
 
     setTimeout(function(){ snackbar.className = snackbar.className.replace("show", ""); }, 3000);
-}
-
-function* statesGenerator(states, startingStateIndex = 2, nextStateName = "skip_next")
-{
-    var currentState = states[startingStateIndex];
-    var iterationCount = 0;
-
-    for (var state = currentState; state != undefined; state = states[state["transitions"][nextStateName]["state_index"]])
-    {
-        iterationCount++;
-
-        yield state;
-
-        var nextTransition = state["transitions"][nextStateName];
-        if (nextTransition == undefined) break;
-    }
-
-    return iterationCount;
-}
-
-function findNextTrackState(states, tracks, startingStateIndex = 2, sourceTrack)
-{
-    var foundTrack = false;
-    for (var state of statesGenerator(states, startingStateIndex, "advance"))
-    {
-        var trackID = state["track"];
-        var track = tracks[trackID];
-        if (foundTrack)
-            return state;
-
-        if (track["metadata"]["uri"] == sourceTrack["metadata"]["uri"])
-        {
-            // same track
-            foundTrack = true;
-        }
-        else
-            foundTrack = false;
-
-    }
-
-    return null;
-}
-
-//
-// Graphics
-//
-
-function onMainUIReady(addedNode)
-{
-    var snackbar = document.createElement('div');
-    snackbar.setAttribute("id", "snackbar");
-    addedNode.appendChild(snackbar);
 }
 
 var checkedForInterception = false;
