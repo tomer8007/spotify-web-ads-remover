@@ -144,6 +144,11 @@ function startInterceptingWebScoket()
 		this.type = o.type || "message";
 		this.__proto__ = o.__proto__ || MessageEvent.__proto__;
 	}
-
-
 }
+
+document.addEventListener('updateCounter', function(e)
+{
+	// just forward this to the background page
+    var counterValue = JSON.parse(e.detail);
+	chrome.runtime.sendMessage({ name: "updateCounter", counterValue: counterValue });
+});

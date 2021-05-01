@@ -3,6 +3,8 @@ var removedAdsList = [];
 var tamperedStatesIds = [];
 var deviceId = "";
 
+var totalAdsRemoved = 0;
+
 var originalFetch = window.fetch;
 var isFetchInterceptionWorking = false;
 var isWebScoketInterceptionWorking = false;
@@ -22,6 +24,7 @@ async function initalize()
     var resultJson = await result.json();
     accessToken = resultJson["accessToken"];
 
+    document.dispatchEvent(new CustomEvent('updateCounter', {detail: 0}));
 }
 
 //
@@ -345,6 +348,10 @@ function onAdRemoved(trackURI, skipped = false)
             showToast("Skipped ad");
         else
             showToast("Removed ad");
+
+        totalAdsRemoved++;
+
+        document.dispatchEvent(new CustomEvent('updateCounter', {detail: totalAdsRemoved}));
     }
 }
 
