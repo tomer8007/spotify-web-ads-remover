@@ -3,7 +3,7 @@
   "name": "Spotify Ads Remover",
   "short_name": "SpotifyAdBlocker",
    "description": "Removes audio ads on Spotify Web Player",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "permissions": 
    [
 	   "*://open.spotify.com/*"
