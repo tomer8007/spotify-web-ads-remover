@@ -30,11 +30,7 @@ function injectScript(scriptName)
 function injectFunctionInstantly(injectedFunction)
 {
 	// Reading from disk seems to slow down the injection
-	/* var response = await fetch(
-	
-	
-	
-	.extension.getURL(scriptName));
+	/* var response = await fetch(browser.extension.getURL(scriptName));
 	   var text = new TextDecoder("utf-8").decode(await response.body.getReader().read().value); */
 	
 	var s = document.createElement('script');
