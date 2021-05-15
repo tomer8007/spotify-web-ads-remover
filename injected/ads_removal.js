@@ -15,6 +15,8 @@ var accessToken = "";
 startObserving();
 initalize();
 
+document.dispatchEvent(new CustomEvent('updateCounter', {detail: 0}));
+
 async function initalize()
 {
     var getTokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player";
@@ -23,8 +25,6 @@ async function initalize()
     var result = await fetch(getTokenUrl, {credentials: "same-origin"});
     var resultJson = await result.json();
     accessToken = resultJson["accessToken"];
-
-    document.dispatchEvent(new CustomEvent('updateCounter', {detail: 0}));
 }
 
 //
