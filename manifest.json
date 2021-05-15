@@ -6,6 +6,8 @@
   "version": "1.0.6",
   "permissions": 
    [
+      "webRequest",
+      "webRequestBlocking",
 	   "*://open.spotify.com/*"
    ],
    "icons": 
