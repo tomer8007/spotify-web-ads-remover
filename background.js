@@ -25,8 +25,19 @@ chrome.webRequest.onHeadersReceived.addListener(function(details)
     {
         if (details.responseHeaders[i].name.toLowerCase() == "content-security-policy")
         {
-            // a hack to allow the page to load our injected inline scripts
-            details.responseHeaders[i].value += " script-src 'self' 'unsafe-inline'";
+            var cspValue = details.responseHeaders[i].value;
+            var entries = cspValue.split(";");
+            for (var j = 0; j < entries.length; j++)
+            {
+                if (entries[j].includes("script-src"))
+                {
+                    // a hack to allow the page to load our injected inline scripts
+                    entries[j] += " 'unsafe-inline'"; 
+                }
+            }
+
+            details.responseHeaders[i].value = entries.join(";");
+            
         }
     }
 

@@ -9,6 +9,10 @@ var originalFetch = window.fetch;
 var isFetchInterceptionWorking = false;
 var isWebScoketInterceptionWorking = false;
 var isSimulatingStateChnage = false;
+var didShowMultiDeviceWarning = false;
+var didShowInterceptionWarning = false;
+var didCheckForInterception = false;
+
 
 var accessToken = "";
 
@@ -84,10 +88,12 @@ wsHook.after = function(messageEvent, url)
         }
         else if (payload.cluster != undefined)
         {
-            deviceId = payload.cluster.active_device_id;
             if (payload.update_reason == "DEVICE_STATE_CHANGED")
             {
-                // TODO: cluster.player_state.next_tracks ?
+                if (deviceId != payload.cluster.active_device_id)
+                {
+                    showMultiDeviceWarning();
+                }
             }
         }
 
@@ -388,20 +394,21 @@ function showToast(text)
     setTimeout(function(){ snackbar.className = snackbar.className.replace("show", ""); }, 3000);
 }
 
-var checkedForInterception = false;
-
 function onSongResumed()
 {
-    if (!checkedForInterception)
-    {
-        setTimeout(checkInterception, 1000);
-        checkedForInterception = true;
-    }
+    setTimeout(checkInterception, 1000);
 }
 
 function checkInterception()
 {
-    if (!isFetchInterceptionWorking || !isWebScoketInterceptionWorking)
+    var isInterceptionWorking = isFetchInterceptionWorking && isWebScoketInterceptionWorking;
+    if (isInterceptionWorking)
+    {
+        if (!didCheckForInterception) 
+            console.log("SpotifyAdRemover: Interception is working.");
+        didCheckForInterception = true;
+    }
+    else if (!didShowInterceptionWarning && !didShowMultiDeviceWarning)
     {
         Swal.fire({
             title: "Oops...",
@@ -412,10 +419,27 @@ function checkInterception()
             confirmButtonText: "OK",
             heightAuto: false
         });
+
+        didShowInterceptionWarning = true;
     }
-    else
+
+}
+
+function showMultiDeviceWarning()
+{
+    if (!didShowMultiDeviceWarning)
     {
-        console.log("SpotifyAdRemoveer: Interception is working.");
+        Swal.fire({
+            title: "Another device is playnig",
+            html: "Please note that Spotify Ads Remover can't control other over playing devices, so ads will not be removed unless audio will play from this tab.",
+            icon: "warning",
+            width: 500,
+            confirmButtonColor: "#DD6B55",
+            confirmButtonText: "OK",
+            heightAuto: false
+        });
+
+        didShowMultiDeviceWarning = true;
     }
 }
 
