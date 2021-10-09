@@ -430,7 +430,7 @@ function showMultiDeviceWarning()
     if (!didShowMultiDeviceWarning)
     {
         Swal.fire({
-            title: "Another device is playnig",
+            title: "Another device is playing",
             html: "Please note that Spotify Ads Remover can't control other over playing devices, so ads will not be removed unless audio will play from this tab.",
             icon: "warning",
             width: 500,
