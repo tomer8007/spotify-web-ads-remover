@@ -32,7 +32,7 @@ async function initalize()
 }
 
 //
-// Hook the fetch() function
+// Hook the fetch() function.
 //
 window.fetch = function(url, init)
 {
@@ -50,13 +50,13 @@ window.fetch = function(url, init)
         deviceId = request.device.device_id;
     }
 
-    // make the original request
+    // Make the original request.
     var fetchResult = originalFetch.call(window, url, init);
     return fetchResult;
 };
 
 //
-// Hook the WebSocket channel
+// Hook the WebSocket channel.
 //
 wsHook.after = function(messageEvent, url) 
 {
@@ -82,7 +82,7 @@ wsHook.after = function(messageEvent, url)
 
             if (isSimulatingStateChnage) 
             {
-                // block this notification from reaching the client, to prevent song chnage
+                // Block this notification from reaching the client, to prevent song change.
                 return new MessageEvent(messageEvent.type, {data: "{}"});
             }
         }
@@ -166,7 +166,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                 var nextState = getNextState(stateMachine, track, startingStateIndex);
                 if (nextState == null)
                 {
-                    // we can't really skip over this state becuase we don't know where to skip to.
+                    // We can't really skip over this state because we don't know where to skip to.
                     // Either we will be able to do so in the next states update, or we won't.
                     // In case we won't let's request the next state and insert it, or, if this fails, at least shorten the ad.
                     
@@ -176,7 +176,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                         nextState = getNextState(futureStateMachine, track);
                         var nextStateId = nextState["state_id"];
 
-                        // fix the new state to be suitable for replacing in the currenet state machine
+                        // Fix the new state to be suitable for replacing in the currenet state machine.
                         nextState["state_id"] = stateId;
                         nextTrack = futureStateMachine["tracks"][nextState["track"]];
                         tracks.push(nextTrack);
@@ -184,7 +184,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                             
                         if (i == startingStateIndex && !isReplacingState) 
                         {
-                            // our new state is going to be played now, let's point the player at the future state machine
+                            // Our new state is going to be played now, let's point the player at the future state machine.
                             nextState["state_id"] = nextStateId;
                             stateMachine["state_machine_id"] = futureStateMachine["state_machine_id"];
 
@@ -205,20 +205,20 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
                 if (nextState != null) 
                 {
-                    // make this state equal to the next one 
+                    // Make this state equal to the next one.
                     state = nextState;
                     tamperedStatesIds.push(nextState["state_id"]);
 
                     removedAds = true;
                 }
 
-                // replace the current state
+                // Replace the current state.
                 states[i] = state;
             }
 
             if (i == startingStateIndex && !isReplacingState && tamperedStatesIds.includes(stateId)) 
             {
-                // our new ad-free state is going to be played now
+                // Our new ad-free state is going to be played now.
                 console.log("SpotifyAdRemover: Removed ad at " + trackURI);
                 onAdRemoved(trackURI);
             }
@@ -260,7 +260,7 @@ async function getStates(stateMachineId, startingStateId)
     if (resultJson["error"] && 
     resultJson["error"]["message"] == "The access token expired")
     {
-        // refresh the access token and try again
+        // Refresh the access token and try again.
         await initalize();
         result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
         resultJson = await result.json();
@@ -461,7 +461,7 @@ function startObserving()
            
                        if (addedNode.getAttribute("role") == "row")
                        {
-                           // song row added
+                           // Song row added.
                        }
        
                        if (addedNode.classList.contains("os-resize-observer"))
