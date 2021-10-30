@@ -174,6 +174,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                     {
                         var futureStateMachine = await getStates(stateMachine["state_machine_id"], state["state_id"]);
                         nextState = getNextState(futureStateMachine, track);
+
                         var nextStateId = nextState["state_id"];
 
                         // Fix the new state to be suitable for replacing in the currenet state machine.
@@ -195,9 +196,9 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                     }
                     catch (exception)
                     {
-                        console.error(exception);
                         state = shortenedState(state, track);
-                        console.log("SpotifyAdRemover: Shortned ad at " + trackURI);
+                        console.log("SpotifyAdRemover: Shortned ad at " + trackURI + " due to exception:");
+                        console.error(exception);
                     }
 
                     removedAds = true;
