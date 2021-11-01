@@ -13,4 +13,4 @@ Download ZIP and open `/safari/SpotiAds`
 Make sure you have `Allow Unsigned Extensions` Enabled in Safari
 
 
-<img src="https://i.ibb.co/37hyTYx/safari-ss.png" alt="safari-ss" width="200">
+<img src="https://i.ibb.co/37hyTYx/safari-ss.png" alt="safari-ss" width="300">
