@@ -11,5 +11,6 @@ The states are modified so that states that represent ads are skipped over (poin
 Working on latest version of safari on MacOS Monterey. 
 Download ZIP and open `/safari/SpotiAds`
 Make sure you have `Allow Unsigned Extensions` Enabled in Safari
-![Tux, the Linux mascot](/safari-ss.png) 
-<a href="https://ibb.co/yXsnNBz"><img src="https://i.ibb.co/37hyTYx/safari-ss.png" alt="safari-ss"></a>
+
+
+<img src="https://i.ibb.co/37hyTYx/safari-ss.png" alt="safari-ss" width="200">
