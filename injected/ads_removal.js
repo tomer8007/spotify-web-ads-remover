@@ -159,12 +159,12 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
             stateMachineString += trackName + " => ";
 
-            if (trackURI.includes(":ad:") && state["disallow_seeking"] == true)
+            if (trackURI.includes(":ad:") && isAd(state) == true)
             {   
                 console.log("SpotifyAdRemover: Encountered ad in " + trackURI);
 
                 var nextState = getNextState(stateMachine, track, startingStateIndex);
-                if (nextState == null)
+                if (isAd(nextState))
                 {
                     // We can't really skip over this state because we don't know where to skip to.
                     // Either we will be able to do so in the next states update, or we won't.
@@ -172,8 +172,25 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                     
                     try
                     {
-                        var futureStateMachine = await getStates(stateMachine["state_machine_id"], state["state_id"]);
-                        nextState = getNextState(futureStateMachine, track);
+                        var maxAttempts = 3;
+                        var j = 0;
+                        var futureStateMachine = stateMachine;
+                        do
+                        {
+                            var latestTrack = futureStateMachine["tracks"][nextState["track"]];
+                            futureStateMachine = await getStates(futureStateMachine["state_machine_id"], state["state_id"]);
+                            nextState = getNextState(futureStateMachine, latestTrack);
+
+                            j++;
+                        }
+                        while (isAd(nextState) && j < maxAttempts)
+                        
+                        if (isAd(nextState))
+                        {
+                            // print out debugging information
+                            console.error("could not find the next ad-free state. state machine was:");
+                            console.error(futureStateMachine);
+                        }
 
                         var nextStateId = nextState["state_id"];
 
@@ -190,7 +207,6 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                             stateMachine["state_machine_id"] = futureStateMachine["state_machine_id"];
 
                             console.log("SpotifyAdRemover: Removed ad at " + trackURI + ", more complex flow");
-
                         }
 
                     }
@@ -309,7 +325,7 @@ function getNextState(stateMachine, sourceTrack, startingStateIndex = 2, exclude
 
     }
 
-    return null;
+    return state;
 }
 
 function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
@@ -333,6 +349,11 @@ function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
     }
 
     return null;
+}
+
+function isAd(state)
+{
+    return state["disallow_seeking"];
 }
 
 //
