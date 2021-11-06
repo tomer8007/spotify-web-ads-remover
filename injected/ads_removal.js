@@ -178,7 +178,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                         do
                         {
                             var latestTrack = futureStateMachine["tracks"][nextState["track"]];
-                            futureStateMachine = await getStates(futureStateMachine["state_machine_id"], state["state_id"]);
+                            futureStateMachine = await getStates(futureStateMachine["state_machine_id"], nextState["state_id"]);
                             nextState = getNextState(futureStateMachine, latestTrack);
 
                             j++;
