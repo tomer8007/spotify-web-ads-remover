@@ -163,7 +163,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
             {   
                 console.log("SpotifyAdRemover: Encountered ad in " + trackURI);
 
-                var nextState = getNextState(stateMachine, track, startingStateIndex);
+                var nextState = getNextState(stateMachine, track, i);
                 if (isAd(nextState))
                 {
                     // We can't really skip over this state because we don't know where to skip to.
@@ -196,6 +196,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
                         // Fix the new state to be suitable for replacing in the currenet state machine.
                         nextState["state_id"] = stateId;
+                        nextState["transitions"] = {};
                         nextTrack = futureStateMachine["tracks"][nextState["track"]];
                         tracks.push(nextTrack);
                         nextState["track"] = tracks.length - 1;
@@ -308,6 +309,7 @@ function getNextState(stateMachine, sourceTrack, startingStateIndex = 2, exclude
 {
     var states = stateMachine["states"];
     var tracks = stateMachine["tracks"];
+    var previousState = null;
 
     var foundTrack = false;
     for (var state of statesGenerator(states, startingStateIndex, "advance"))
@@ -321,7 +323,15 @@ function getNextState(stateMachine, sourceTrack, startingStateIndex = 2, exclude
             return state;
         }
 
+        if (previousState == state)
+        {
+            console.error("Cyclic state machine detected.");
+            debugger;
+            return state;
+        }
+
         foundTrack = (track["metadata"]["uri"] == sourceTrack["metadata"]["uri"]);
+        previousState = state;
 
     }
 
