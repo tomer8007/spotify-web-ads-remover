@@ -65,37 +65,42 @@ wsHook.after = function(messageEvent, url)
         var data = JSON.parse(messageEvent.data);
         if (data.payloads == undefined) {resolve(messageEvent); return;}
 
-        var payload = data.payloads[0];
-        if (payload.type == "replace_state")
+        for (var i= 0; i < data.payloads.length; i++)
         {
-            var stateMachine = payload["state_machine"];
-            var stateRef = payload["state_ref"];
-            if (stateRef != null) 
+            var payload = data.payloads[i];
+            if (payload.type == "replace_state")
             {
-                var currentStateIndex = stateRef["state_index"];
-
-                payload["state_machine"] = await manipulateStateMachine(stateMachine, currentStateIndex, true);
-                data.payloads[0] = payload;
-
-                isWebScoketInterceptionWorking = true;
-            }
-
-            if (isSimulatingStateChnage) 
-            {
-                // Block this notification from reaching the client, to prevent song change.
-                return new MessageEvent(messageEvent.type, {data: "{}"});
-            }
-        }
-        else if (payload.cluster != undefined)
-        {
-            if (payload.update_reason == "DEVICE_STATE_CHANGED")
-            {
-                if (deviceId != payload.cluster.active_device_id)
+                var stateMachine = payload["state_machine"];
+                var stateRef = payload["state_ref"];
+                if (stateRef != null) 
                 {
-                    showMultiDeviceWarning();
+                    var currentStateIndex = stateRef["state_index"];
+    
+                    payload["state_machine"] = await manipulateStateMachine(stateMachine, currentStateIndex, true);
+                    data.payloads[i] = payload;
+    
+                    isWebScoketInterceptionWorking = true;
+                }
+    
+                if (isSimulatingStateChnage) 
+                {
+                    // Block this notification from reaching the client, to prevent song change.
+                    return new MessageEvent(messageEvent.type, {data: "{}"});
+                }
+            }
+            else if (payload.cluster != undefined)
+            {
+                if (payload.update_reason == "DEVICE_STATE_CHANGED")
+                {
+                    if (deviceId != payload.cluster.active_device_id)
+                    {
+                        showMultiDeviceWarning();
+                    }
                 }
             }
         }
+
+        
 
         messageEvent.data = JSON.stringify(data);
 
@@ -167,8 +172,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                 if (isAd(nextState))
                 {
                     // We can't really skip over this state because we don't know where to skip to.
-                    // Either we will be able to do so in the next states update, or we won't.
-                    // In case we won't let's request the next state and insert it, or, if this fails, at least shorten the ad.
+                    // We will request even more states, or, if this fails, at least shorten the ad.
                     
                     try
                     {

@@ -2,6 +2,6 @@ chrome.browserAction.getBadgeText({}, function(result)
 {
     if (result != "" && result != undefined)
     {
-        document.getElementById("text").innerText = "So far, " + result + " audio ads were removed successfully in Spotify's queue.";
+        document.getElementById("text").innerHTML = "So far, <b>" + result + "</b> audio ads were removed from Spotify's queue.";
     }
 });
