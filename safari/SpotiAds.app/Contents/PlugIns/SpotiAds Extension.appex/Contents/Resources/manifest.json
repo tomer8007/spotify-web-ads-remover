@@ -1,0 +1,41 @@
+{
+  "manifest_version": 2,
+  "name": "SpotiAds",
+  "short_name": "SpotiAdBlocker",
+   "description": "Removes audio ads on Spotify™ Web Player",
+  "version": "1.0.9",
+  "permissions": 
+   [
+      "webRequest",
+      "webRequestBlocking",
+	   "*://open.spotify.com/*"
+   ],
+   "icons": 
+   {
+      "128": "images/icon_2_128.png"
+   },
+   "browser_action": {
+      "default_icon": "images/icon_2_128.png",
+      "default_popup": "popup/popup.html"
+   },
+   "background":
+   {
+    "scripts": ["background.js"],
+    "persistent": false
+   },
+   "content_scripts": 
+   [
+  	{
+  	  "matches": ["https://open.spotify.com/*"],
+  	  "js": ["content_script.js"],
+  	  "run_at": "document_start"
+  	},
+    {
+      "matches": ["https://open.spotify.com/*"],
+      "js": ["lib/sweetalert.min.js"],
+      "css": ["styles.css"]
+    }
+   ],
+   
+	"web_accessible_resources": [ "injected/*", "lib/*"]
+}
