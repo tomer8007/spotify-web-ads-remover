@@ -1,4 +1,9 @@
 
+if (typeof chrome !== "undefined") {
+  var browser = chrome;
+}
+
+
 injectFunctionInstantly(startInterceptingWebScoket);
 injectOtherScripts();
 
@@ -13,7 +18,7 @@ function injectScript(scriptName)
 	return new Promise(function(resolve, reject) 
 	{
 		var s = document.createElement('script');
-		s.src = chrome.extension.getURL(scriptName);
+		s.src = browser.extension.getURL(scriptName);
 		s.onload = function() {
 			this.parentNode.removeChild(this);
 			resolve(true);
@@ -25,7 +30,7 @@ function injectScript(scriptName)
 function injectFunctionInstantly(injectedFunction)
 {
 	// Reading from disk seems to slow down the injection
-	/* var response = await fetch(chrome.extension.getURL(scriptName));
+	/* var response = await fetch(browser.extension.getURL(scriptName));
 	   var text = new TextDecoder("utf-8").decode(await response.body.getReader().read().value); */
 	
 	var s = document.createElement('script');
@@ -150,5 +155,5 @@ document.addEventListener('updateCounter', function(e)
 {
 	// just forward this to the background page
     var counterValue = JSON.parse(e.detail);
-	chrome.runtime.sendMessage({ name: "updateCounter", counterValue: counterValue });
+	browser.runtime.sendMessage({ name: "updateCounter", counterValue: counterValue });
 });
