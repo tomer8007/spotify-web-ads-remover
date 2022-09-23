@@ -100,8 +100,6 @@ wsHook.after = function(messageEvent, url)
             }
         }
 
-        
-
         messageEvent.data = JSON.stringify(data);
 
         resolve(messageEvent);
@@ -467,7 +465,7 @@ function showMultiDeviceWarning()
     {
         Swal.fire({
             title: "Another device is playing",
-            html: "Please note that Spotify Ads Remover can't control other over playing devices, so ads will not be removed unless audio will play from this tab.",
+            html: "Please note that Spotify Ads Remover can't control over other playing devices, so ads will not be removed unless audio will play from this tab.",
             icon: "warning",
             width: 500,
             confirmButtonColor: "#DD6B55",

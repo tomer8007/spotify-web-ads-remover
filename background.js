@@ -15,7 +15,6 @@ function onMessage(messageEvent, sender, callback)
         {
             callback(result);
         });
-        
     }
 }
 
