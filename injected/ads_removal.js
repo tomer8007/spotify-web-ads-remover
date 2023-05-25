@@ -281,7 +281,6 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
     if (result.status != 200)
     {
         var resultText = await result.text();
-        console.log(resultText);
 
         // Assume the access token has expired without checking it too much.
         // var resultJson = await result.json();
