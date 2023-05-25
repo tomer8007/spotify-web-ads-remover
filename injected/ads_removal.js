@@ -291,13 +291,13 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
         await refreshAccessToken();
         result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
                                                             body: JSON.stringify(body)});
-        resultJson = await result.json();
     }
 
     // TODO: There is a case where the request will return a 502 Error code.
     // This will return a null stateMachine, and just shorten the ad instead of removing it.
     // Retry for now
     
+    var resultJson = await result.json();
     var stateMachine = resultJson["state_machine"];
     if (!stateMachine)
     {
