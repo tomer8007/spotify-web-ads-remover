@@ -94,7 +94,10 @@ wsHook.after = function(messageEvent, url)
                 {
                     if (deviceId != payload.cluster.active_device_id)
                     {
-                        showMultiDeviceWarning();
+                        // TODO: Find a way to really detect when another device is playing
+                        // instead of having false positives
+
+                        // showMultiDeviceWarning();
                     }
                 }
             }
