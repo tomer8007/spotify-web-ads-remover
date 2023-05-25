@@ -17,11 +17,11 @@ var didCheckForInterception = false;
 var accessToken = "";
 
 startObserving();
-initalize();
+refreshAccessToken();
 
 document.dispatchEvent(new CustomEvent('updateCounter', {detail: 0}));
 
-async function initalize()
+async function refreshAccessToken()
 {
     var getTokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player";
 
@@ -218,6 +218,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                         state = shortenedState(state, track);
                         console.log("SpotifyAdRemover: Shortned ad at " + trackURI + " due to exception:");
                         console.error(exception);
+                        console.error(exception.stack);
                     }
 
                     removedAds = true;
@@ -268,25 +269,44 @@ function shortenedState(state, track)
     return state;
 }
 
-async function getStates(stateMachineId, startingStateId)
+async function getStates(stateMachineId, startingStateId, maxRetries = 3)
 {
     var statesUrl = "https://spclient.wg.spotify.com/track-playback/v1/devices/" + deviceId + "/state";
     var body = {"seq_num":1619015341662,"state_ref":{"state_machine_id":stateMachineId, "state_id": startingStateId,"paused":false},
-            "sub_state":{"playback_speed":1,"position":5504,"duration":177343,"stream_time":81500,"media_type":"AUDIO","bitrate":160000},"previous_position":5504
+            "sub_state":{"playback_speed":1,"position":0,"duration":0,"stream_time":0,"media_type":"AUDIO","bitrate":160000},"previous_position":0
             ,"debug_source":"resume"};
 
-    var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-    var resultJson = await result.json();
-    if (resultJson["error"] && 
-    resultJson["error"]["message"] == "The access token expired")
+    var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
+                                                            body: JSON.stringify(body)});
+    if (result.status != 200)
     {
+        var resultText = await result.text();
+        console.log(resultText);
+
+        // Assume the access token has expired without checking it too much.
+        // var resultJson = await result.json();
+        // var looksExpired = (resultJson["error"] && resultJson["error"]["message"] == "The access token expired")
+
         // Refresh the access token and try again.
-        await initalize();
-        result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        await refreshAccessToken();
+        result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
+                                                            body: JSON.stringify(body)});
         resultJson = await result.json();
     }
+
+    // TODO: There is a case where the request will return a 502 Error code.
+    // This will return a null stateMachine, and just shorten the ad instead of removing it.
+    // Retry for now
     
-    return resultJson["state_machine"];
+    var stateMachine = resultJson["state_machine"];
+    if (!stateMachine)
+    {
+        debugger;
+        if (maxRetries > 0)
+            return getStates(stateMachineId, startingStateId, --maxRetries)
+    }
+
+    return stateMachine;
 }
 
 function* statesGenerator(states, startingStateIndex = 2, nextStateName = "skip_next")
@@ -456,7 +476,6 @@ function checkInterception()
 
         didShowInterceptionWarning = true;
     }
-
 }
 
 function showMultiDeviceWarning()
