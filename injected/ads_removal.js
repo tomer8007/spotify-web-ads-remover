@@ -23,6 +23,8 @@ document.dispatchEvent(new CustomEvent('updateCounter', {detail: 0}));
 
 async function refreshAccessToken()
 {
+    console.log("SpotiAds: Refreshing access token.");
+
     var getTokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player";
 
     // get access token
@@ -165,12 +167,12 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
             stateMachineString += trackName + " => ";
 
-            if (trackURI.includes(":ad:") && isAd(state) == true)
+            if (isAd(state, stateMachine))
             {   
                 console.log("SpotifyAdRemover: Encountered ad in " + trackURI);
 
                 var nextState = getNextState(stateMachine, track, i);
-                if (isAd(nextState))
+                if (isAd(nextState, stateMachine))
                 {
                     // We can't really skip over this state because we don't know where to skip to.
                     // We will request even more states, or, if this fails, at least shorten the ad.
@@ -188,13 +190,14 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
                             j++;
                         }
-                        while (isAd(nextState) && j < maxAttempts)
+                        while (isAd(nextState, futureStateMachine) && j < maxAttempts)
                         
-                        if (isAd(nextState))
+                        if (isAd(nextState, futureStateMachine))
                         {
                             // print out debugging information
                             console.error("could not find the next ad-free state. state machine was:");
                             console.error(futureStateMachine);
+                            debugger;
                         }
 
                         var nextStateId = nextState["state_id"];
@@ -385,9 +388,17 @@ function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
     return null;
 }
 
-function isAd(state)
+function isAd(state, stateMachine)
 {
-    return state["disallow_seeking"];
+    var states = stateMachine["states"];
+    var tracks = stateMachine["tracks"];
+
+    var trackID = state["track"];
+    var track = tracks[trackID];
+
+    var trackURI = track["metadata"]["uri"];
+
+    return trackURI.includes(":ad:");
 }
 
 //
