@@ -530,7 +530,7 @@ function startObserving()
                            // Song row added.
                        }
        
-                       if (addedNode.classList.contains("os-resize-observer"))
+                       if (addedNode.id && addedNode.id.includes("main"))
                        {
                            onMainUIReady(addedNode);
                        }
@@ -551,4 +551,14 @@ function startObserving()
           });
     });
     mutationObserver.observe(document.documentElement, { childList: true, subtree: true, attributeFilter: ["aria-label"] });
+
+    setTimeout(function()
+    {
+        if (document.getElementById("main"))
+        {
+            var mainElement = document.getElementById("main");
+            onMainUIReady(mainElement);
+        }
+
+    }, 2000);
 }
