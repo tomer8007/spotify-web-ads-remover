@@ -1,9 +1,9 @@
 {
   "manifest_version": 2,
-  "name": "SpotiAds",
+  "name": "SpotiAds - Ads remover for Spotify™",
   "short_name": "SpotiAdBlocker",
    "description": "Removes audio ads on Spotify™ Web Player",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "permissions": 
    [
       "webRequest",
