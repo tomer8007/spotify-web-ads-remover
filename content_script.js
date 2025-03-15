@@ -1,9 +1,11 @@
 
-injectFunctionInstantly(startInterceptingWebScoket);
+//injectFunctionInstantly(startInterceptingWebScoket);
 injectOtherScripts();
 
 async function injectOtherScripts() 
 {
+	await injectScript('injected/ws_hook.js');
+	await injectScript('lib/moduleraid.js');
 	await injectScript('injected/ads_removal.js');
 	await injectScript('lib/sweetalert.min.js');
 }
@@ -13,7 +15,7 @@ function injectScript(scriptName)
 	return new Promise(function(resolve, reject) 
 	{
 		var s = document.createElement('script');
-		s.src = chrome.extension.getURL(scriptName);
+		s.src = chrome.runtime.getURL(scriptName);
 		s.onload = function() {
 			this.parentNode.removeChild(this);
 			resolve(true);

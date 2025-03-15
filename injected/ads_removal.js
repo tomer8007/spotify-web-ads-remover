@@ -17,27 +17,18 @@ var didCheckForInterception = false;
 var accessToken = "";
 
 startObserving();
-refreshAccessToken();
+//refreshAccessToken();
 
 document.dispatchEvent(new CustomEvent('updateCounter', {detail: 0}));
 
-async function refreshAccessToken()
-{
-    console.log("SpotiAds: Refreshing access token.");
-
-    var getTokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player";
-
-    // get access token
-    var result = await fetch(getTokenUrl, {credentials: "same-origin"});
-    var resultJson = await result.json();
-    accessToken = resultJson["accessToken"];
-}
 
 //
 // Hook the fetch() function.
 //
 window.fetch = function(url, init)
 {
+    var url = typeof(url) == 'string' ? url : url.toString();
+
     if (url != undefined && url.includes("/state"))
     {
         return originalFetch.call(window, url, init).then(function(response)
@@ -51,11 +42,33 @@ window.fetch = function(url, init)
         var request = JSON.parse(init.body);
         deviceId = request.device.device_id;
     }
+    else if (url.includes("get_access_token"))
+    {
+        originalFetch.call(window, url, init).then(function(response)
+        {
+            onAccessTokenResponseIntercepted(response);
+        });
+    }
 
     // Make the original request.
     var fetchResult = originalFetch.call(window, url, init);
     return fetchResult;
 };
+
+async function onAccessTokenResponseIntercepted(accessTokenResponse)
+{
+    var resultJson = await accessTokenResponse.json();
+
+    console.log("SpotiAds: access token received.");
+
+    if (accessTokenResponse.status != 200)
+    {
+        console.error("SpotiAds: Could not refresh access token. error:");
+        console.error(resultJson);
+        throw "Can't refresh access token";
+    }
+    accessToken = resultJson["accessToken"];
+}
 
 //
 // Hook the WebSocket channel.
@@ -284,18 +297,19 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
 
     var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
                                                             body: JSON.stringify(body)});
-    if (result.status != 200)
+    if (result.status != 200) // TODO: what does 204 mean?
     {
-        var resultText = await result.text();
-
         // Assume the access token has expired without checking it too much.
         // var resultJson = await result.json();
         // var looksExpired = (resultJson["error"] && resultJson["error"]["message"] == "The access token expired")
 
-        // Refresh the access token and try again.
-        await refreshAccessToken();
-        result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
-                                                            body: JSON.stringify(body)});
+        console.error("SpotiAds: Failed to get states, http status code " + result.status);
+        return null;
+
+        // // Refresh the access token and try again.
+        // await refreshAccessToken();
+        // result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
+        //                                                     body: JSON.stringify(body)});
     }
 
     // TODO: There is a case where the request will return a 502 Error code.
@@ -562,3 +576,25 @@ function startObserving()
 
     }, 2000);
 }
+
+// _parseProvidedToken
+//_refreshToken
+// _lastToken
+// async function refreshAccessToken()
+// {
+//     console.log("SpotiAds: Refreshing access token.");
+
+//     var getTokenUrl = "https://open.spotify.com/get_access_token?reason=transport&productType=web_player&totp=824945&totpVer=5";
+
+//     // get access token
+//     var result = await fetch(getTokenUrl, {credentials: "same-origin"});
+//     var resultJson = await result.json();
+
+//     if (result.status != 200)
+//     {
+//         console.error("SpotiAds: Could not refresh access token. error:");
+//         console.error(resultJson);
+//         throw "Can't refresh access token";
+//     }
+//     accessToken = resultJson["accessToken"];
+// }

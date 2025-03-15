@@ -1,4 +1,4 @@
-chrome.browserAction.getBadgeText({}, function(result)
+chrome.action.getBadgeText({}, function(result)
 {
     if (result != "" && result != undefined)
     {
