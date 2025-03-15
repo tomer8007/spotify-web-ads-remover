@@ -17,7 +17,6 @@ var didCheckForInterception = false;
 var accessToken = "";
 
 startObserving();
-//refreshAccessToken();
 
 document.dispatchEvent(new CustomEvent('updateCounter', {detail: 0}));
 
@@ -80,7 +79,7 @@ wsHook.after = function(messageEvent, url)
         var data = JSON.parse(messageEvent.data);
         if (data.payloads == undefined) {resolve(messageEvent); return;}
 
-        for (var i= 0; i < data.payloads.length; i++)
+        for (var i = 0; i < data.payloads.length; i++)
         {
             var payload = data.payloads[i];
             if (payload.type == "replace_state")
@@ -113,6 +112,14 @@ wsHook.after = function(messageEvent, url)
                         // instead of having false positives
 
                         // showMultiDeviceWarning();
+                    }
+
+                    if (payload.cluster.player_state.track.provider == "ads/inject_tracks")
+                    {
+                        console.log("SpotiAds: Spotify tring to inject ads? advertiser: " + payload.cluster.player_state.track.metadata.advertiser);
+                        //payload.cluster.player_state.restrictions = {};
+                        payload.cluster.player_state.track = null;
+                        data.payloads[i] = payload;
                     }
                 }
             }
@@ -231,6 +238,8 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                             console.log("SpotifyAdRemover: Removed ad at " + trackURI + ", more complex flow");
                         }
 
+                        removedAds = true;
+
                     }
                     catch (exception)
                     {
@@ -239,12 +248,11 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                         console.error(exception);
                         console.error(exception.stack);
                     }
-
-                    removedAds = true;
                 }
 
                 if (nextState != null) 
                 {
+                    // Remove ads in the casual flow
                     // Make this state equal to the next one.
                     state = nextState;
                     tamperedStatesIds.push(nextState["state_id"]);
@@ -267,6 +275,8 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
     }
     while (removedAds);
+
+    stateMachine = tryToRemoveAdTracks(stateMachine);
 
     stateMachine["states"] = states;
     stateMachine["tracks"] = tracks;
@@ -402,6 +412,24 @@ function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
     return null;
 }
 
+function tryToRemoveAdTracks(stateMachine)
+{
+    var tracks = stateMachine["tracks"];
+
+    for (var i = 0; i < tracks.length; i++)
+    {
+        if (isAdTrack(tracks[i]))
+        {
+            console.log("SpotiAds: trying to remove ad track " + tracks[i]["metadata"]["uri"]);
+            //debugger;
+            tracks[i] = null;
+        }
+    }
+
+    stateMachine["tracks"] = tracks;
+    return stateMachine;
+}
+
 function isAd(state, stateMachine)
 {
     var states = stateMachine["states"];
@@ -410,6 +438,11 @@ function isAd(state, stateMachine)
     var trackID = state["track"];
     var track = tracks[trackID];
 
+    return isAdTrack(track);
+}
+
+function isAdTrack(track)
+{
     var trackURI = track["metadata"]["uri"];
 
     return trackURI.includes(":ad:");
@@ -421,6 +454,9 @@ function isAd(state, stateMachine)
 
 function onMainUIReady(addedNode)
 {
+    if (document.getElementById("snackbar")) return;
+    if (addedNode == null) addedNode = document.getElementById("main");
+
     var snackbar = document.createElement('div');
     snackbar.setAttribute("id", "snackbar");
     addedNode.appendChild(snackbar);
@@ -547,6 +583,7 @@ function startObserving()
                        if (addedNode.id && addedNode.id.includes("main"))
                        {
                            onMainUIReady(addedNode);
+                           setTimeout(onMainUIReady, 2000); // seems like "main" gets deleted after a while
                        }
                    }
                    
@@ -574,7 +611,7 @@ function startObserving()
             onMainUIReady(mainElement);
         }
 
-    }, 2000);
+    }, 9000);
 }
 
 // _parseProvidedToken
