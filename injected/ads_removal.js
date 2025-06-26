@@ -134,13 +134,10 @@ wsHook.after = function(messageEvent, url)
     });
 }
 
-var seq_num = 0;
-
 function onFetchResponseReceived(url, init, responseBody)
 {
     var requestBody = init.body;
     var request = JSON.parse(requestBody);
-	seq_num = request.seq_num;
 
     var originalJsonPromise = responseBody.json();
     responseBody.json = function()
@@ -306,24 +303,16 @@ function shortenedState(state, track)
 
 async function getStates(stateMachineId, startingStateId, maxRetries = 3)
 {
-    var statesUrl = "https://gew4-spclient.spotify.com/track-playback/v1/devices/" + deviceId + "/state";
-    var body = {"seq_num":seq_num,"state_ref":{"state_machine_id":stateMachineId, "state_id": startingStateId,"paused":false},
-            "sub_state":{"playback_speed":1,"position":0,"duration":0,"media_type":"AUDIO","bitrate":128000,"audio_quality":"HIGH","format":10},"previous_position":0
-            ,"debug_source":"started_playing"};
+    var statesUrl = "https://spclient.wg.spotify.com/track-playback/v1/devices/" + deviceId + "/state";
+    var body = {"seq_num":1619015341662,"state_ref":{"state_machine_id":stateMachineId, "state_id": startingStateId,"paused":false},
+            "sub_state":{"playback_speed":1,"position":0,"duration":0,"stream_time":0,"media_type":"AUDIO","bitrate":160000},"previous_position":0
+            ,"debug_source":"resume"};
 
-	var options = {
-		"mode":"cors",
-		"credentials":"same-origin",
-		"redirect":"follow",
-		"method":"PUT",
-		"headers":{
+    var result = await originalFetch.call(window, statesUrl, {method: 'PUT', "headers": {
 			"content-type":"application/json",
 			'Authorization': accessToken,
 			"client-token": clientToken
-		},
-		"body": JSON.stringify(body)};
-
-    var result = await originalFetch.call(window, statesUrl, options);
+		}, body: JSON.stringify(body)});
     if (result.status != 200) // TODO: what does 204 mean?
     {
         // Assume the access token has expired without checking it too much.
@@ -429,7 +418,6 @@ function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
     return null;
 }
 
-// TODO: this function does not actually help in removing ads, it's useless
 function tryToRemoveAdTracks(stateMachine)
 {
     var tracks = stateMachine["tracks"];
