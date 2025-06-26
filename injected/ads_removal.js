@@ -15,6 +15,7 @@ var didCheckForInterception = false;
 
 
 var accessToken = "";
+var clientToken = "";
 
 startObserving();
 
@@ -30,6 +31,8 @@ window.fetch = function(url, init)
 
     if (url != undefined && url.includes("/state"))
     {
+		accessToken = init.headers['authorization'];
+		clientToken = init.headers['client-token'];
         return originalFetch.call(window, url, init).then(function(response)
         {
             var modifiedResponse = onFetchResponseReceived(url, init, response);
@@ -41,13 +44,13 @@ window.fetch = function(url, init)
         var request = JSON.parse(init.body);
         deviceId = request.device.device_id;
     }
-    else if (url.includes("get_access_token"))
-    {
-        originalFetch.call(window, url, init).then(function(response)
-        {
-            onAccessTokenResponseIntercepted(response);
-        });
-    }
+    // else if (url.includes("get_access_token"))
+    // {
+    //     originalFetch.call(window, url, init).then(function(response)
+    //     {
+    //         onAccessTokenResponseIntercepted(response);
+    //     });
+    // }
 
     // Make the original request.
     var fetchResult = originalFetch.call(window, url, init);
@@ -305,8 +308,11 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
             "sub_state":{"playback_speed":1,"position":0,"duration":0,"stream_time":0,"media_type":"AUDIO","bitrate":160000},"previous_position":0
             ,"debug_source":"resume"};
 
-    var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
-                                                            body: JSON.stringify(body)});
+    var result = await originalFetch.call(window, statesUrl, {method: 'PUT', "headers": {
+			"content-type":"application/json",
+			'Authorization': accessToken,
+			"client-token": clientToken
+		}, body: JSON.stringify(body)});
     if (result.status != 200) // TODO: what does 204 mean?
     {
         // Assume the access token has expired without checking it too much.
