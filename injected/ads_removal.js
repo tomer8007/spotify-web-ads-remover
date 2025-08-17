@@ -15,6 +15,8 @@ var didCheckForInterception = false;
 
 
 var accessToken = "";
+var clientToken = "";
+var authorizationHeader = "";
 
 startObserving();
 
@@ -30,6 +32,11 @@ window.fetch = function(url, init)
 
     if (url != undefined && url.includes("/state"))
     {
+        if (init.headers["authorization"])
+            authorizationHeader = init.headers["authorization"];
+        if (init.headers["client-token"])
+            clientToken = init.headers["client-token"];
+
         return originalFetch.call(window, url, init).then(function(response)
         {
             var modifiedResponse = onFetchResponseReceived(url, init, response);
@@ -305,16 +312,19 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
             "sub_state":{"playback_speed":1,"position":0,"duration":0,"stream_time":0,"media_type":"AUDIO","bitrate":160000},"previous_position":0
             ,"debug_source":"resume"};
 
-    var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {'Authorization': "Bearer " + accessToken, 'Content-Type': 'application/json'}, 
-                                                            body: JSON.stringify(body)});
+    var authorizationHeaderToPut = authorizationHeader ? authorizationHeader : "Bearer " + accessToken;
+    var clientTokenToPut = clientToken ? clientToken : "";
+
+    var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {
+        'Authorization': authorizationHeaderToPut, 'client-token': clientTokenToPut,  'Content-Type': 'application/json'}, 
+         body: JSON.stringify(body)});
     if (result.status != 200) // TODO: what does 204 mean?
     {
         // Assume the access token has expired without checking it too much.
         // var resultJson = await result.json();
         // var looksExpired = (resultJson["error"] && resultJson["error"]["message"] == "The access token expired")
 
-        console.error("SpotiAds: Failed to get states, http status code " + result.status);
-        return null;
+        throw Error("SpotiAds: Failed to get states, http status code " + result.status);
 
         // // Refresh the access token and try again.
         // await refreshAccessToken();
@@ -412,6 +422,7 @@ function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
     return null;
 }
 
+// TODO: this function does not actually help in removing ads, it's useless
 function tryToRemoveAdTracks(stateMachine)
 {
     var tracks = stateMachine["tracks"];
