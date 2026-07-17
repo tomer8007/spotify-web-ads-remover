@@ -454,6 +454,8 @@ function isAd(state, stateMachine)
 
 function isAdTrack(track)
 {
+    if (track == null) return false;
+    
     var trackURI = track["metadata"]["uri"];
 
     return trackURI.includes(":ad:");
