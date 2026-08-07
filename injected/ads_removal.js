@@ -257,7 +257,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                     }
                 }
 
-                if (nextState != null) 
+                if (nextState != null && state != nextState) 
                 {
                     // Remove ads in the casual flow
                     // Make this state equal to the next one.
@@ -318,8 +318,13 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
     var result = await originalFetch.call(window, statesUrl,{method: 'PUT', headers: {
         'Authorization': authorizationHeaderToPut, 'client-token': clientTokenToPut,  'Content-Type': 'application/json'}, 
          body: JSON.stringify(body)});
-    if (result.status != 200) // TODO: what does 204 mean?
+    if (result.status != 200) 
     {
+
+        if (result.status == 204)
+        {
+            // TODO: what does 204 No Content mean? no future state machine known?
+        }
         // Assume the access token has expired without checking it too much.
         // var resultJson = await result.json();
         // var looksExpired = (resultJson["error"] && resultJson["error"]["message"] == "The access token expired")
@@ -455,7 +460,7 @@ function isAd(state, stateMachine)
 function isAdTrack(track)
 {
     if (track == null) return false;
-    
+
     var trackURI = track["metadata"]["uri"];
 
     return trackURI.includes(":ad:");
