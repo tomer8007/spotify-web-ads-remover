@@ -1,6 +1,6 @@
 var currentTracks = [];
 var removedAdsList = [];
-var tamperedStatesIds = [];
+var tamperedStatesMap = {};
 var deviceId = "";
 
 var totalAdsRemoved = 0;
@@ -127,6 +127,7 @@ wsHook.after = function(messageEvent, url)
                         //payload.cluster.player_state.restrictions = {};
                         payload.cluster.player_state.track = null;
                         data.payloads[i] = payload;
+                        data.payloads[i] = null; // do we want to nullify the state?
                     }
                 }
             }
@@ -150,14 +151,31 @@ function onFetchResponseReceived(url, init, responseBody)
         {
             var stateMachine = data["state_machine"];           
             var updatedStateRef = data["updated_state_ref"];    
-            if (stateMachine == undefined || updatedStateRef == null) return data;
 
-            var currentStateIndex = updatedStateRef["state_index"];
+            var commands = data["commands"]; // for /state_conflict
+            if (commands != null)
+            {
+                for (var key of Object.keys(commands))
+                {
+                    var stateMachine = data["commands"][key]["state_machine"];           
+                    var currentStateIndex = data["commands"][key]["state_ref"]["state_index"];
 
-            data["state_machine"] = await manipulateStateMachine(stateMachine, currentStateIndex, false);
+                    data["commands"][key]["state_machine"] = await manipulateStateMachine(stateMachine, currentStateIndex, false);
+        
+                    isFetchInterceptionWorking = true;
 
-            isFetchInterceptionWorking = true;
+                }
+            }
+            else
+            {
+                if (stateMachine == undefined || updatedStateRef == null) return data;
 
+                var currentStateIndex = updatedStateRef["state_index"];
+    
+                data["state_machine"] = await manipulateStateMachine(stateMachine, currentStateIndex, false);
+    
+                isFetchInterceptionWorking = true;
+            }
             return data;
 
         }).catch(function(reason)
@@ -262,7 +280,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                     // Remove ads in the casual flow
                     // Make this state equal to the next one.
                     state = nextState;
-                    tamperedStatesIds.push(nextState["state_id"]);
+                    tamperedStatesMap[nextState["state_id"]] = trackURI;
 
                     removedAds = true;
                 }
@@ -271,11 +289,17 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                 states[i] = state;
             }
 
-            if (i == startingStateIndex && !isReplacingState && tamperedStatesIds.includes(stateId)) 
+            if (i == startingStateIndex && !isReplacingState && tamperedStatesMap[stateId] != null) 
             {
                 // Our new ad-free state is going to be played now.
-                console.log("SpotifyAdRemover: Removed ad at " + trackURI);
-                onAdRemoved(trackURI);
+                var removedAdUri = tamperedStatesMap[stateId];
+                console.log("SpotifyAdRemover: Removed ad at " + removedAdUri);
+                if (removedAdUri.includes(":track:"))
+                {
+                    // shouldn't happen
+                    debugger;
+                }
+                onAdRemoved(removedAdUri);
             }
 
         }
