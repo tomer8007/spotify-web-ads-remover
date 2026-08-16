@@ -10,3 +10,8 @@ The states are modified so that states that represent ads are skipped over (poin
 ## Firefox/Safari Support
 Possibly [here](https://github.com/tomer8007/spotify-web-ads-remover/pull/2) and [there](https://github.com/tomer8007/spotify-web-ads-remover/pull/8).
 
+## Privacy policy
+No data is ever transmitted to anywhere. No backend, no analytics, no server.
+
+You can find the privacy policy [here](https://github.com/tomer8007/spotify-web-ads-remover/wiki/Chrome-Extension-Privacy-Policy).
+
