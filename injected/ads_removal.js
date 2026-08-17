@@ -291,6 +291,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
                 if (nextState != null && nextState["disallow_seeking"] == true)
                 {
+                    // TODO: this seems to still have some empty transitions. So skipping does not work. Maybe just take the "show_next" and put it to "next"
                     console.log("SpotiAds: Encountered a track that disallows seeking. Enabling");
                     nextState["disallow_seeking"] = false;
                     nextState["restrictions"] = {};
@@ -601,7 +602,7 @@ function onTooManyRequestsError()
 {
     var now = new Date();
 
-    if (now - lastTooMayyReqeustsErrorTime > 60000)
+    if (now - lastTooMayyReqeustsErrorTime > 9000)
     {
         Swal.fire({
             title: "You're skipping too fast",
