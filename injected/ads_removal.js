@@ -291,9 +291,8 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
                 if (nextState != null && nextState["disallow_seeking"] == true)
                 {
-                    // TODO: this seems to make seeking change the GUI, but does not actually seek the song
                     console.log("SpotiAds: Encountered a track that disallows seeking. Enabling");
-                    nextState["disallow_seeking"] = true;
+                    nextState["disallow_seeking"] = false;
                     nextState["restrictions"] = {};
                 }
 
