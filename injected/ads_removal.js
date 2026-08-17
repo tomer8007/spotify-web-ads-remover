@@ -55,6 +55,18 @@ window.fetch = function(url, init)
             onAccessTokenResponseIntercepted(response);
         });
     }
+    else if (url.includes("/license"))
+    {
+        // DRM license request. 
+        return originalFetch.call(window, url, init).then(function(response)
+        {
+            if (response.status == 429)
+            {
+                onTooManyRequestsError();
+            }
+            return response;
+        });
+    }
 
     // Make the original request.
     var fetchResult = originalFetch.call(window, url, init);
@@ -207,6 +219,8 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
             var trackID = state["track"];
             var track = tracks[trackID];
 
+            if (track == null) continue; // might happen for filler states
+
             var trackURI = track["metadata"]["uri"];
             var trackName = track["metadata"]["name"];
 
@@ -273,6 +287,14 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                         console.error(exception);
                         console.error(exception.stack);
                     }
+                }
+
+                if (nextState != null && nextState["disallow_seeking"] == true)
+                {
+                    // TODO: this seems to make seeking change the GUI, but does not actually seek the song
+                    console.log("SpotiAds: Encountered a track that disallows seeking. Enabling");
+                    nextState["disallow_seeking"] = true;
+                    nextState["restrictions"] = {};
                 }
 
                 if (nextState != null && state != nextState) 
@@ -353,6 +375,7 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
         // var resultJson = await result.json();
         // var looksExpired = (resultJson["error"] && resultJson["error"]["message"] == "The access token expired")
 
+        onStateMachineError(result.status);
         throw Error("SpotiAds: Failed to get states, http status code " + result.status);
 
         // // Refresh the access token and try again.
@@ -460,7 +483,7 @@ function tryToRemoveAdTracks(stateMachine)
     {
         if (isAdTrack(tracks[i]))
         {
-            console.log("SpotiAds: trying to remove ad track " + tracks[i]["metadata"]["uri"]);
+            //console.log("SpotiAds: trying to remove ad track " + tracks[i]["metadata"]["uri"]);
             //debugger;
             tracks[i] = null;
         }
@@ -477,6 +500,12 @@ function isAd(state, stateMachine)
 
     var trackID = state["track"];
     var track = tracks[trackID];
+
+    if (state["state_id"].includes("filler"))
+    {
+        console.log("SpotiAds: Encountered filler state, assuming not an ad");
+        return false;
+    }
 
     return isAdTrack(track);
 }
@@ -542,6 +571,51 @@ function onAdCouldntBeRemoved(trackURI)
     }
 
     lastMissedAdTime = now;
+}
+
+var lastStateMachineErrorTime = 0;
+
+function onStateMachineError(errorCode)
+{
+    var now = new Date();
+
+    if (now - lastStateMachineErrorTime > 60000)
+    {
+        Swal.fire({
+            title: "Queue Error",
+            html: "It appears that for some reason SpotiAds could not retrieve the next state. Please refresh, and perhaps report that back to the developer with error code: " + errorCode,
+            icon: "warning",
+            width: 600,
+            confirmButtonColor: "#DD6B55",
+            confirmButtonText: "Got it",
+            heightAuto: false
+        });
+    }
+
+    lastStateMachineErrorTime = now;
+}
+
+
+var lastTooMayyReqeustsErrorTime = 0;
+
+function onTooManyRequestsError()
+{
+    var now = new Date();
+
+    if (now - lastTooMayyReqeustsErrorTime > 60000)
+    {
+        Swal.fire({
+            title: "You're skipping too fast",
+            html: "Spotify doesn't allow users to play too many songs in such a high rate, so your queue will now break. You need to cooldown for a minute or so, then try playing again.",
+            icon: "warning",
+            width: 600,
+            confirmButtonColor: "#DD6B55",
+            confirmButtonText: "Got it",
+            heightAuto: false
+        });
+    }
+
+    lastTooMayyReqeustsErrorTime = now;
 }
 
 function showToast(text)
