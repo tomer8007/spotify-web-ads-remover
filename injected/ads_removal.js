@@ -42,8 +42,8 @@ window.fetch = function(url, init)
         {
             console.log("SpotiAds: Changing Spotify's states request to reflect future state machine");
 
-            var stateMachineId = request["state_ref"]["state_id"].split("__")[1];
-            var stateId = request["state_ref"]["state_id"].split("__")[2];
+            var stateMachineId = request["state_ref"]["state_id"].split("+")[1];
+            var stateId = request["state_ref"]["state_id"].split("+")[2];
 
             request["state_ref"]["state_id"] = stateId;
             request["state_ref"]["state_machine_id"] = stateMachineId;
@@ -65,9 +65,10 @@ window.fetch = function(url, init)
     }
     else if (url.includes("get_access_token"))
     {
-        originalFetch.call(window, url, init).then(function(response)
+        return originalFetch.call(window, url, init).then(function(response)
         {
             onAccessTokenResponseIntercepted(response);
+            return response;
         });
     }
     else if (url.includes("/license"))
@@ -216,36 +217,34 @@ function onStatesFetchResponseReceived(url, init, responseBody)
 
 async function manipulateStateMachine(stateMachine, startingStateIndex, isReplacingState)
 {
-    var states = stateMachine["states"];
-    var tracks = stateMachine["tracks"];
-
-    var stateMachineString = "";
-
+    
     do
     {
         var removedAds = false;
-        stateMachineString = "";
+        console.log("SpotiAds: We see state machine: " + getStateMachineDestripction(stateMachine) + " (state machine id: " + stateMachine["state_machine_id"] + ")");
 
-        for (var i = 0; i < states.length; i++)
+        for (var i = 0; i < stateMachine["states"].length; i++)
         {
-            var state = states[i];
-            var stateId = states[i]["state_id"];
+            var state = stateMachine["states"][i];
+            var stateId = stateMachine["states"][i]["state_id"];
+            var currentStateIdNormalized = getFutureStateId(stateId);
             
             var trackID = state["track"];
-            var track = tracks[trackID];
+            var track = stateMachine["tracks"][trackID];
 
             if (track == null) continue; // might happen for filler states
 
             var trackURI = track["metadata"]["uri"];
             var trackName = track["metadata"]["name"];
 
-            stateMachineString += trackName + " => ";
+
+            var newState = structuredClone(state);
 
             if (isAd(state, stateMachine))
             {   
                 console.log("SpotifyAdRemover: Encountered ad in " + trackURI);
 
-                var newState = getNextAdFreeState(stateMachine, stateId, i);
+                newState = getNextAdFreeState(stateMachine, stateId, i);
                 if (isAd(newState, stateMachine))
                 {
                     // We can't really skip over this state because we don't know where to skip to.
@@ -259,60 +258,28 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                         {
                             newState = nextNextState;
 
-                            var nextStateId = newState["state_id"];
+                            var originalNextStateId = newState["state_id"];
 
-                            // Fix the new state to be suitable for replacing in the currenet state machine.
-                            var [fixedState, fixedStateMachine] = fixStateForOldStateMachine(newState, futureStateMachine, stateId, stateMachine);
-                            newState = fixedState;
-                            stateMachine = fixedStateMachine;
-                            tracks = stateMachine["tracks"];
-                            states = stateMachine["states"];
-
-                            var nextTrackName = tracks[fixedState["track"]]["metadata"]["name"];
+                            var nextTrackName = futureStateMachine["tracks"][newState["track"]]["metadata"]["name"];
                             console.log("SpotiAds: after the ad we have track '" + nextTrackName + "'.");
 
-                            if ((newState["transitions"]["advance"] == null && newState["disallow_seeking"] == true) && !newState["state_id"].includes("future_"))
-                            {
-                                var track = tracks[state["track"]];
-                                var trackName = track["metadata"]["name"];
-
-                                console.log("SpotiAds: Encountered a track '" + trackName + "' that disallows seeking. Requesting more states");
-                                
-                                var stateId = state["state_id"];
-                                var futureStateMachine = await getStates(stateMachine["state_machine_id"], state["state_id"]);
-                                if (futureStateMachine != null)
-                                {
-                                    newState = futureStateMachine["states"][2];
-
-                                    // Fix the new state to be suitable for replacing in the currenet state machine.
-                                    var [fixedState, fixedStateMachine] = fixStateForOldStateMachine(newState, futureStateMachine, stateId, stateMachine);
-                                    newState = fixedState;
-                                    stateMachine = fixedStateMachine;
-                                    tracks = stateMachine["tracks"];
-                                    states = stateMachine["states"];
                             
-                                }
-                                else
-                                {
-                                    console.log("SpotiAds: Can't get more states, hacking the next state");
-                                    debugger;
-
-                                    newState["disallow_seeking"] = false;
-                                    newState["restrictions"] = {};
-                                }
-                            }
+                            // Fix the new state to be suitable for replacing in the currenet state machine.
+                            console.log("Spotiads: Inserting new state from future state machine");
+                            var wantedStateId = state["state_id"];
+                            var [fixedState, fixedStateMachine] = fixStateForOldStateMachine(newState, futureStateMachine, wantedStateId, stateMachine);
+                            newState = fixedState;
+                            stateMachine = fixedStateMachine;
 
                                 
-                            if (i == startingStateIndex && !isReplacingState) 
-                            {
-                                // Our new state is going to be played now, let's point the player at the future state machine.
-                                newState["state_id"] = nextStateId;
-                                stateMachine["state_machine_id"] = futureStateMachine["state_machine_id"];
+                            // if (i == startingStateIndex && !isReplacingState) 
+                            // {
+                            //     // Our new state is going to be played now, let's point the player at the future state machine.
+                            //     newState["state_id"] = originalNextStateId;
+                            //     stateMachine["state_machine_id"] = futureStateMachine["state_machine_id"];
 
-                                console.log("SpotifyAdRemover: Removed ad at " + trackURI + ", more complex flow");
-                            }
-
-                            removedAds = true;  
+                            //     console.log("SpotifyAdRemover: Removed ad at " + trackURI + ", more complex flow");
+                            // }
                         }
                         else
                         {
@@ -330,31 +297,65 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
                         console.error(exception.stack);
                     }
                 }
-
-                if (newState != null && state != newState) 
+                else
                 {
+                    console.log("SpotiAds: after the ad we have track '" + nextTrackName + "'. (easy flow)");
+                }
+
+                // We don't want tracks with no transitions
+                // We'll request more states to discover the better state with the transitions
+                if ((newState["transitions"]["advance"] == null && newState["disallow_seeking"] == true) && !isAd(newState, futureStateMachine))
+                {
+                    var track = stateMachine["tracks"][newState["track"]];
+                    var trackName = track["metadata"]["name"];
+
+                    console.log("SpotiAds: Encountered a track '" + trackName + "' that disallows seeking. Requesting more states");
+                    
+                    [futureStateMachine, stateRef] = await getStates(stateMachine["state_machine_id"], newState["state_id"]);
+                    if (futureStateMachine != null)
+                    {
+                        newState = futureStateMachine["states"][stateRef["state_index"]];
+                        
+                        console.log("Spotiads: Inserting fixed track with transitions from future state machine");
+                        var wantedStateId = state["state_id"];
+                        var [fixedState, fixedStateMachine] = fixStateForOldStateMachine(newState, futureStateMachine, wantedStateId, stateMachine);
+                        newState = fixedState;
+                        stateMachine = fixedStateMachine;
+                    }
+                    else
+                    {
+                        console.log("SpotiAds: Can't get more states, hacking the next state");
+                        debugger;
+
+                        newState["disallow_seeking"] = false;
+                        newState["restrictions"] = {};
+                    }
+                    
+                }
+
+                currentStateIdNormalized = getFutureStateId(newState["state_id"]);
+
+                if (newState != null && state["state_id"] != newState["state_id"]) 
+                {
+                    // We succesfully found the next state after the ad.
                     // Remove ads in the casual flow
                     // Make this state equal to the next one.
                     state = newState;
-                    tamperedStatesMap[newState["state_id"]] = trackURI;
+
+                    tamperedStatesMap[currentStateIdNormalized] = trackURI;
 
                     removedAds = true;
                 }
 
                 // Replace the current state.
-                states[i] = state;
+                stateMachine["states"][i] = state;
             }
 
-            if (i == startingStateIndex && !isReplacingState && tamperedStatesMap[stateId] != null) 
+            if (i == startingStateIndex && !isReplacingState && tamperedStatesMap[currentStateIdNormalized] != null) 
             {
                 // Our new ad-free state is going to be played now.
-                var removedAdUri = tamperedStatesMap[stateId];
+                var removedAdUri = tamperedStatesMap[currentStateIdNormalized];
                 console.log("SpotifyAdRemover: Removed ad at " + removedAdUri);
-                if (removedAdUri.includes(":track:"))
-                {
-                    // shouldn't happen
-                    debugger;
-                }
                 onAdRemoved(removedAdUri);
             }
 
@@ -365,10 +366,7 @@ async function manipulateStateMachine(stateMachine, startingStateIndex, isReplac
 
     stateMachine = tryToRemoveAdTracks(stateMachine);
 
-    stateMachine["states"] = states;
-    stateMachine["tracks"] = tracks;
-
-    currentTracks = tracks;
+    currentTracks = stateMachine["tracks"];
 
     return stateMachine;
 }
@@ -377,7 +375,7 @@ async function getNextAdFreeStateFromFutureStateMachine(stateMachine, nextState)
 {
     try
     {
-        var maxAttempts = 3;
+        var maxAttempts = 5;
         var j = 0;
         var futureStateMachine = stateMachine;
         do
@@ -387,12 +385,12 @@ async function getNextAdFreeStateFromFutureStateMachine(stateMachine, nextState)
 
             if (nextState["state_id"].includes("future_"))
             {
-                stateMachineId = nextState["state_id"].split("__")[1];
-                stateId = nextState["state_id"].split("__")[2];
+                stateMachineId = nextState["state_id"].split("+")[1];
+                stateId = nextState["state_id"].split("+")[2];
             }
 
-            futureStateMachine = await getStates(stateMachineId, stateId);
-            nextState = getNextAdFreeState(futureStateMachine, nextState["state_id"]);
+            [futureStateMachine, stateRef] = await getStates(stateMachineId, stateId);
+            nextState = getNextAdFreeState(futureStateMachine, stateId);
 
             j++;
         }
@@ -422,7 +420,7 @@ async function getNextAdFreeStateFromFutureStateMachine(stateMachine, nextState)
 function fixStateForOldStateMachine(stateFromNewStateMachineToFix, futureStateMachine, expectedStateId, stateMachine)
 {
     var futureStateMachineId = futureStateMachine["state_machine_id"];
-    stateFromNewStateMachineToFix["state_id"] = expectedStateId;
+    stateFromNewStateMachineToFix["state_id"] = "_future_+" + futureStateMachineId + "+" + stateFromNewStateMachineToFix["state_id"];
     var track = futureStateMachine["tracks"][stateFromNewStateMachineToFix["track"]];
     stateMachine["tracks"].push(track);
     stateFromNewStateMachineToFix["track"] = stateMachine["tracks"].length - 1;
@@ -436,15 +434,27 @@ function fixStateForOldStateMachine(stateFromNewStateMachineToFix, futureStateMa
         var transitionStateId = value["state_index"];
         var transitionState = futureStateMachine["states"][transitionStateId];
         if (transitionState == null) continue; // this might happen, maybe it means "fetch for more states"
+
         var track = futureStateMachine["tracks"][transitionState["track"]];
         stateMachine["tracks"].push(track);
         transitionState["track"] = stateMachine["tracks"].length - 1;
-        transitionState["state_id"] = "_future__" + futureStateMachineId + "__" + transitionState["state_id"];
+        transitionState["state_id"] = "_future_+" + futureStateMachineId + "+" + transitionState["state_id"];
 
         stateMachine["states"].push(transitionState);
         stateFromNewStateMachineToFix["transitions"][key]["state_index"] = stateMachine["states"].length - 1;
 
     }
+
+    // Maybe we don't want that. let the calling code do this in a more controlled fashion
+    // for (var i = 0; i < stateMachine["states"].length; i++)
+    // {
+    //     var state = stateMachine["states"][i];
+    //     if (state["state_id"] == expectedStateId)
+    //     {
+    //         // Replace the original state with the fixed state from the future state machine
+    //         stateMachine[i] = stateFromNewStateMachineToFix
+    //     }
+    // }
 
     return [stateFromNewStateMachineToFix, stateMachine];
 }
@@ -463,8 +473,16 @@ function shortenedState(state, track)
 
 async function getStates(stateMachineId, startingStateId, maxRetries = 3)
 {
+    if (startingStateId.includes("future_"))
+    {
+        console.log("SpotiAds: getStates: changing request to reflect future state machine");
+
+        stateMachineId = startingStateId.split("+")[1];
+        startingStateId = startingStateId.split("+")[2];
+    }
+
     var statesUrl = "https://spclient.wg.spotify.com/track-playback/v1/devices/" + deviceId + "/state";
-    var body = {"seq_num":1619015341662,"state_ref":{"state_machine_id":stateMachineId, "state_id": startingStateId,"paused":false},
+    var body = {"seq_num":0,"state_ref":{"state_machine_id":stateMachineId, "state_id": startingStateId,"paused":false},
             "sub_state":{"playback_speed":1,"position":0,"duration":0,"stream_time":0,"media_type":"AUDIO","bitrate":160000},"previous_position":0
             ,"debug_source":"resume"};
 
@@ -500,6 +518,7 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
     
     var resultJson = await result.json();
     var stateMachine = resultJson["state_machine"];
+    var stateRef = resultJson["updated_state_ref"];
     if (!stateMachine)
     {
         debugger;
@@ -507,7 +526,7 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
             return getStates(stateMachineId, startingStateId, --maxRetries)
     }
 
-    return stateMachine;
+    return [stateMachine, stateRef];
 }
 
 function* statesGenerator(states, startingStateIndex = 2, nextStateName = "skip_next")
@@ -568,6 +587,34 @@ function getNextAdFreeState(stateMachine, stateId, startingStateIndex = 2, exclu
     return state;
 }
 
+function getStateMachineDestripction(stateMachine, startingStateIndex = 2)
+{
+    var stateMachineString = "";
+    for (var state of statesGenerator(stateMachine["states"], startingStateIndex, "advance"))
+    {
+        var trackID = state["track"];
+        var track = stateMachine["tracks"][trackID];
+        var trackName = track["metadata"]["name"];
+
+        if (isAd(state, stateMachine))
+        {
+            trackName = "[AD] " + trackName;
+        }
+
+        stateMachineString += trackName + " > ";
+    }
+
+    return stateMachineString;
+}
+
+function getFutureStateId(stateId)
+{
+    if (stateId.includes("future_"))
+        stateId = stateId.split("+")[2];
+
+    return stateId;
+}
+
 function getPreviousState(stateMachine, sourceTrack, startingStateIndex = 2)
 {
     var states = stateMachine["states"];
@@ -600,7 +647,7 @@ function tryToRemoveAdTracks(stateMachine)
     {
         if (isAdTrack(tracks[i]))
         {
-            //console.log("SpotiAds: trying to remove ad track " + tracks[i]["metadata"]["uri"]);
+            console.log("SpotiAds: trying to remove ad track " + tracks[i]["metadata"]["uri"]);
             //debugger;
             tracks[i] = null;
         }
