@@ -1,3 +1,4 @@
+(function() {
 var currentTracks = [];
 var removedAdsList = [];
 var tamperedStatesMap = {};
@@ -1031,4 +1032,5 @@ function startObserving()
 //         throw "Can't refresh access token";
 //     }
 //     accessToken = resultJson["accessToken"];
+})();
 // }
