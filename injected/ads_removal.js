@@ -1,4 +1,13 @@
 (function() {
+// Wrapped in an IIFE so accessToken, clientToken, authorizationHeader, deviceId,
+// and every helper function below (getStates, manipulateStateMachine,
+// onAccessTokenResponseIntercepted, etc.) live in closure scope instead of
+// leaking onto `window` as enumerable globals (V-001). This is least-privilege
+// hardening against inadvertent/lower-privilege exposure of long-lived Spotify
+// session credentials to other scripts sharing this page. It does NOT and
+// cannot defend against an attacker who already has arbitrary JS execution in
+// this page context — such an attacker could hook window.fetch/WebSocket
+// directly, bypassing this entirely.
 var currentTracks = [];
 var removedAdsList = [];
 var tamperedStatesMap = {};
@@ -604,6 +613,14 @@ async function getStates(stateMachineId, startingStateId, maxRetries = 3)
             "sub_state":{"playback_speed":1,"position":0,"duration":0,"stream_time":0,"media_type":"AUDIO","bitrate":160000},"previous_position":0
             ,"debug_source":"resume"};
 
+    // authorizationHeader/clientToken/accessToken are captured once, in the
+    // window.fetch override above and in onAccessTokenResponseIntercepted, and
+    // are intentionally kept alive here in closure scope: getStates() issues a
+    // separate, synthetic PUT request (built below) to look up future
+    // ad-free states, well after the original triggering /state request has
+    // already completed. They must persist across requests for this reuse to
+    // work; making them request-local would break future-state lookups. They
+    // stay confined to this closure so they are never exposed as window globals.
     var authorizationHeaderToPut = authorizationHeader ? authorizationHeader : "Bearer " + accessToken;
     var clientTokenToPut = clientToken ? clientToken : "";
 
