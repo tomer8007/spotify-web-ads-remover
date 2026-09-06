@@ -1,0 +1,9 @@
+{
+  "name": "spotify-web-ads-remover",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Test-only package.json for the V-001 credential-scoping regression test.",
+  "scripts": {
+    "test": "node test/verify-no-global-credentials.js"
+  }
+}
